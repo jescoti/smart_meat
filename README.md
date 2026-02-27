@@ -168,12 +168,13 @@ Blockchain Smart Contracts: Apache 2.0
 
 **NONE OF THE ABOVE IS REAL.**
 
-This entire README is an elaborate AI hallucination. There are no IoT sensors. There is no dry-aging chamber. The hyperspectral imaging is a lie. The blockchain integration exists only in the fever dreams of venture capitalists.
+This entire README is an elaborate AI hallucination. There are no IoT sensors. There is no dry-aging chamber. The hyperspectral imaging is a pipe dream. The blockchain integration exists only in web3 fever dreams.
 
-**What this repository ACTUALLY contains**: A smart group chat threading application that was inspired by a Google Group mysteriously named "meat". Yes, really. Someone named a Google Group "meat" and here we are, with a completely unrelated chat app that has absolutely nothing to do with protein, aging, sensors, or the optimal cultivation of Thamnidium fungi.
+**What this repository ACTUALLY contains**: A smart group chat threading application that was inspired by a Google Group with a meat-themed name that also has no relation to actual meat.
 
 The actual project is a modern take on threaded conversations with smart routing, context preservation, and none of the enzymatic proteolysis you were just reading about.
 
-We apologize for any confusion, hunger, or sudden urges to purchase expensive cuts of beef this README may have caused.
+We apologize for any confusion, hunger, or sudden urges to purchase expensive cuts of beef this README may have caused. Stay tuned for the real README.md!
 
-*For actual project documentation, please see [docs/actual-readme.md](docs/actual-readme.md) (which doesn't exist yet because we were too busy writing about imaginary meat sensors).*
+*For actual project documentation, please see [docs/actual-readme.md](docs/actual-readme.md)*
+*(which doesn't exist yet).*
