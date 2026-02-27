@@ -1,0 +1,30 @@
+{
+  "metaswarm_version": "0.8.0",
+  "installed_at": "2026-02-27T11:39:00Z",
+  "updated_at": "2026-02-27T11:39:00Z",
+  "detection": {
+    "language": "typescript+python",
+    "framework": "nextjs+fastapi",
+    "test_runner": "vitest+pytest",
+    "linter": "eslint+ruff",
+    "formatter": "prettier+ruff-format",
+    "package_manager": "npm",
+    "type_checker": "tsc+mypy",
+    "ci": "github-actions",
+    "git_hooks": "husky"
+  },
+  "choices": {
+    "coverage_threshold": 100,
+    "external_tools": true,
+    "visual_review": true,
+    "ci_pipeline": false,
+    "git_hooks": true
+  },
+  "commands": {
+    "test": "npx vitest run && pytest",
+    "coverage": "npx vitest run --coverage && pytest --cov --cov-fail-under=100",
+    "lint": "npx eslint . && ruff check .",
+    "typecheck": "npx tsc --noEmit && mypy .",
+    "format_check": "npx prettier --check . && ruff format --check ."
+  }
+}
