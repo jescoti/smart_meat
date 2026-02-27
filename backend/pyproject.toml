@@ -21,6 +21,7 @@ dependencies = [
     "google-auth-oauthlib>=1.2.0",
     "pgvector>=0.3.0",
     "cryptography>=44.0.0",
+    "pyjwt>=2.8.0",
 ]
 
 [project.optional-dependencies]
@@ -54,3 +55,10 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--tb=short"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+show_missing = true
