@@ -1,12 +1,17 @@
-"""Search API endpoint — full-text search across messages.
+"""Search API endpoint — full-text, semantic, and combined search.
 
 Uses the factory-router pattern for testability.  The search query is
 handled via ``websearch_to_tsquery`` in the service layer — all user input
-is parameterised, never interpolated into SQL.
+is parameterised, never interpolated into SQL.  Supports three modes:
+
+- ``fts`` (default): PostgreSQL full-text search
+- ``semantic``: pgvector cosine distance on embeddings
+- ``combined``: Weighted merge of FTS + semantic (0.7/0.3)
 """
 
 from __future__ import annotations
 
+import enum
 import uuid
 from datetime import datetime
 
@@ -14,7 +19,20 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.search import MessageSearchHit, search_messages
+from app.services.search import (
+    MessageSearchHit,
+    combined_search,
+    search_messages,
+    semantic_search,
+)
+
+
+class SearchMode(enum.StrEnum):
+    """Supported search modes."""
+
+    fts = "fts"
+    semantic = "semantic"
+    combined = "combined"
 
 
 async def _get_session_dependency() -> AsyncSession:  # pragma: no cover
@@ -65,6 +83,7 @@ def create_search_router() -> APIRouter:
         sender: str | None = None,
         date_from: datetime | None = None,
         date_to: datetime | None = None,
+        mode: SearchMode = SearchMode.fts,
         page: int = Query(default=1, ge=1),
         per_page: int = Query(default=20, ge=1, le=100),
         session: AsyncSession = _session_dep,
@@ -78,6 +97,7 @@ def create_search_router() -> APIRouter:
             sender: Optional sender email filter.
             date_from: Optional ISO datetime lower bound.
             date_to: Optional ISO datetime upper bound.
+            mode: Search mode — "fts" (default), "semantic", or "combined".
             page: Page number (default 1).
             per_page: Results per page (default 20, max 100).
         """
@@ -93,17 +113,24 @@ def create_search_router() -> APIRouter:
                 content={"error": "bad_request", "message": "Search query is required"},
             )
 
-        result = await search_messages(
-            session=session,
-            user_id=uuid.UUID(user_id),
-            query=q.strip(),
-            group_id=group_id,
-            sender_email=sender,
-            date_from=date_from,
-            date_to=date_to,
-            page=page,
-            per_page=per_page,
-        )
+        search_kwargs = {
+            "session": session,
+            "user_id": uuid.UUID(user_id),
+            "query": q.strip(),
+            "group_id": group_id,
+            "sender_email": sender,
+            "date_from": date_from,
+            "date_to": date_to,
+            "page": page,
+            "per_page": per_page,
+        }
+
+        if mode == SearchMode.semantic:
+            result = await semantic_search(**search_kwargs)
+        elif mode == SearchMode.combined:
+            result = await combined_search(**search_kwargs)
+        else:
+            result = await search_messages(**search_kwargs)
 
         return JSONResponse(
             status_code=200,

@@ -418,3 +418,144 @@ class TestSearchEndpointEmptyResults:
         data = resp.json()
         assert data["results"] == []
         assert data["total"] == 0
+
+
+class TestSearchEndpointModeParameter:
+    """Tests for the mode query parameter routing."""
+
+    @patch("app.api.search.search_messages", new_callable=AsyncMock)
+    async def test_default_mode_uses_fts(self, mock_search: AsyncMock) -> None:
+        """Without mode parameter, should default to FTS search."""
+        mock_search.return_value = _make_search_result()
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/search?q=test",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        mock_search.assert_awaited_once()
+
+    @patch("app.api.search.search_messages", new_callable=AsyncMock)
+    async def test_fts_mode_uses_fts(self, mock_search: AsyncMock) -> None:
+        """mode=fts should use FTS search."""
+        mock_search.return_value = _make_search_result()
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/search?q=test&mode=fts",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        mock_search.assert_awaited_once()
+
+    @patch("app.api.search.semantic_search", new_callable=AsyncMock)
+    async def test_semantic_mode_uses_semantic_search(self, mock_semantic: AsyncMock) -> None:
+        """mode=semantic should use semantic search."""
+        mock_semantic.return_value = _make_search_result()
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/search?q=test&mode=semantic",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        mock_semantic.assert_awaited_once()
+
+    @patch("app.api.search.combined_search", new_callable=AsyncMock)
+    async def test_combined_mode_uses_combined_search(self, mock_combined: AsyncMock) -> None:
+        """mode=combined should use combined search."""
+        mock_combined.return_value = _make_search_result()
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/search?q=test&mode=combined",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        mock_combined.assert_awaited_once()
+
+    async def test_invalid_mode_returns_422(self) -> None:
+        """Invalid mode value should return 422."""
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/search?q=test&mode=invalid",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 422
+
+    @patch("app.api.search.semantic_search", new_callable=AsyncMock)
+    async def test_semantic_mode_passes_filters(self, mock_semantic: AsyncMock) -> None:
+        """Semantic mode should pass all filter params."""
+        mock_semantic.return_value = _make_search_result()
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                f"/api/search?q=test&mode=semantic&group_id={GROUP_ID}&sender=alice@example.com",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        call_kwargs = mock_semantic.call_args.kwargs
+        assert call_kwargs["group_id"] == GROUP_ID
+        assert call_kwargs["sender_email"] == "alice@example.com"
+
+    @patch("app.api.search.combined_search", new_callable=AsyncMock)
+    async def test_combined_mode_passes_filters(self, mock_combined: AsyncMock) -> None:
+        """Combined mode should pass all filter params."""
+        mock_combined.return_value = _make_search_result()
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                f"/api/search?q=test&mode=combined&group_id={GROUP_ID}",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        call_kwargs = mock_combined.call_args.kwargs
+        assert call_kwargs["group_id"] == GROUP_ID
+
+    @patch("app.api.search.combined_search", new_callable=AsyncMock)
+    async def test_combined_mode_passes_pagination(self, mock_combined: AsyncMock) -> None:
+        """Combined mode should pass pagination params."""
+        mock_combined.return_value = _make_search_result(page=2, per_page=10, total=50)
+
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get(
+                "/api/search?q=test&mode=combined&page=2&per_page=10",
+                headers={"X-User-Id": str(USER_ID)},
+            )
+
+        assert resp.status_code == 200
+        call_kwargs = mock_combined.call_args.kwargs
+        assert call_kwargs["page"] == 2
+        assert call_kwargs["per_page"] == 10
