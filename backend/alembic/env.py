@@ -16,7 +16,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.config import get_settings
+from app.config import settings as app_settings
 from app.db.models import Base
 
 # Alembic Config object — provides access to .ini values
@@ -30,8 +30,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Override sqlalchemy.url with the value from our app settings
-settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", app_settings.DATABASE_URL)
 
 
 def run_migrations_offline() -> None:
