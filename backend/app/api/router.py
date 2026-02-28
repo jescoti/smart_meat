@@ -7,6 +7,7 @@ instance created in ``app.main``.
 
 from fastapi import APIRouter
 
+from app.api.auth import create_auth_router
 from app.api.consent import create_consent_router
 from app.api.dashboard import create_dashboard_router
 from app.api.groups import create_groups_router
@@ -26,6 +27,15 @@ async def health() -> dict[str, str]:
 
 
 # Wire up sub-routers
+api_router.include_router(
+    create_auth_router(
+        secret_key=settings.SECRET_KEY,
+        encryption_key=settings.ENCRYPTION_KEY,
+        google_client_id=settings.GOOGLE_CLIENT_ID,
+        google_client_secret=settings.GOOGLE_CLIENT_SECRET,
+        google_redirect_uri=settings.GOOGLE_REDIRECT_URI,
+    )
+)
 api_router.include_router(create_consent_router())
 api_router.include_router(
     create_groups_router(
