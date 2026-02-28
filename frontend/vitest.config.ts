@@ -16,6 +16,7 @@ export default defineConfig({
         "src/components/common/**/*.tsx",
         "src/components/sync/**/*.tsx",
         "src/components/thread/**/*.tsx",
+        "src/components/search/**/*.tsx",
         "src/lib/**/*.ts",
       ],
       exclude: [
