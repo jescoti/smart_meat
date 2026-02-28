@@ -8,6 +8,7 @@ a mock ``httpx.AsyncClient``.
 from __future__ import annotations
 
 import asyncio
+import base64
 
 import httpx
 
@@ -106,6 +107,18 @@ class GmailClient:
         else:
             async with httpx.AsyncClient() as http_client:  # pragma: no cover
                 resp = await http_client.get(url, headers=self._headers(), params=params)
+
+        self._handle_error(resp)
+        return resp.json()  # type: ignore[no-any-return]
+
+    async def _post(self, path: str, json_body: dict) -> dict:
+        """Perform a POST request to the Gmail API and return the JSON body."""
+        url = f"{_BASE_URL}/{path}"
+        if self._client is not None:
+            resp = await self._client.post(url, headers=self._headers(), json=json_body)
+        else:
+            async with httpx.AsyncClient() as http_client:  # pragma: no cover
+                resp = await http_client.post(url, headers=self._headers(), json=json_body)
 
         self._handle_error(resp)
         return resp.json()  # type: ignore[no-any-return]
@@ -210,3 +223,19 @@ class GmailClient:
         history_records: list[dict] = data.get("history", [])
         latest_id: str | None = data.get("historyId")
         return history_records, latest_id
+
+    async def send_message(self, raw_message: str) -> dict:
+        """Send a raw RFC 2822 message via Gmail API.
+
+        Parameters
+        ----------
+        raw_message:
+            The complete RFC 2822 formatted message as a string.
+
+        Returns
+        -------
+        dict
+            The sent message metadata (contains id, threadId, etc.).
+        """
+        encoded = base64.urlsafe_b64encode(raw_message.encode("utf-8")).decode("ascii")
+        return await self._post("messages/send", {"raw": encoded})

@@ -153,4 +153,219 @@ describe("ThreadViewer", () => {
     // Only the root should have a collapse/expand button
     expect(collapseButtons).toHaveLength(1);
   });
+
+  it("opens reply composer when Reply button is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+        onReplySend={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    // Click the Reply button on the root message
+    const replyButton = screen.getByRole("button", { name: /reply/i });
+    await user.click(replyButton);
+
+    // ReplyComposer should appear with text area
+    expect(
+      screen.getByPlaceholderText(/write your reply/i),
+    ).toBeInTheDocument();
+  });
+
+  it("closes reply composer when Cancel is clicked", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+        onReplySend={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    // Open reply
+    await user.click(screen.getByRole("button", { name: /reply/i }));
+    expect(
+      screen.getByPlaceholderText(/write your reply/i),
+    ).toBeInTheDocument();
+
+    // Cancel
+    await user.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(
+      screen.queryByPlaceholderText(/write your reply/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("toggles reply composer off when Reply is clicked again", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+        onReplySend={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    const replyButton = screen.getByRole("button", { name: /reply/i });
+
+    // Open reply
+    await user.click(replyButton);
+    expect(
+      screen.getByPlaceholderText(/write your reply/i),
+    ).toBeInTheDocument();
+
+    // Click reply again to close
+    await user.click(replyButton);
+    expect(
+      screen.queryByPlaceholderText(/write your reply/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onReplySend when reply is sent and closes composer on success", async () => {
+    const user = userEvent.setup();
+    const mockOnReplySend = vi.fn().mockResolvedValue(true);
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+        onReplySend={mockOnReplySend}
+      />,
+    );
+
+    // Open reply
+    await user.click(screen.getByRole("button", { name: /reply/i }));
+
+    // Type reply
+    await user.type(
+      screen.getByPlaceholderText(/write your reply/i),
+      "Test reply text",
+    );
+
+    // Click Send
+    await user.click(screen.getByRole("button", { name: /^send$/i }));
+
+    // Confirm
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
+
+    expect(mockOnReplySend).toHaveBeenCalledWith("msg-1", "Test reply text");
+
+    // Composer should be closed after successful send
+    expect(
+      screen.queryByPlaceholderText(/write your reply/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps composer open when reply send fails", async () => {
+    const user = userEvent.setup();
+    const mockOnReplySend = vi.fn().mockResolvedValue(false);
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+        onReplySend={mockOnReplySend}
+      />,
+    );
+
+    // Open reply
+    await user.click(screen.getByRole("button", { name: /reply/i }));
+
+    // Type reply
+    await user.type(
+      screen.getByPlaceholderText(/write your reply/i),
+      "Test reply text",
+    );
+
+    // Click Send
+    await user.click(screen.getByRole("button", { name: /^send$/i }));
+
+    // Confirm
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
+
+    // Composer should remain open
+    expect(
+      screen.getByPlaceholderText(/write your reply/i),
+    ).toBeInTheDocument();
+  });
+
+  it("does not show reply composer without groupEmail", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        onReplySend={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    // Click the Reply button
+    await user.click(screen.getByRole("button", { name: /reply/i }));
+
+    // ReplyComposer should not appear without groupEmail
+    expect(
+      screen.queryByPlaceholderText(/write your reply/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns false from handleReplySend when no onReplySend provided", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadViewer
+        messages={[rootMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+      />,
+    );
+
+    // Open reply
+    await user.click(screen.getByRole("button", { name: /reply/i }));
+
+    // Type reply
+    await user.type(
+      screen.getByPlaceholderText(/write your reply/i),
+      "Test reply text",
+    );
+
+    // Click Send
+    await user.click(screen.getByRole("button", { name: /^send$/i }));
+
+    // Confirm — should not crash, composer stays open
+    await user.click(screen.getByRole("button", { name: /confirm/i }));
+
+    // Composer should remain open since there was no onReplySend
+    expect(
+      screen.getByPlaceholderText(/write your reply/i),
+    ).toBeInTheDocument();
+  });
+
+  it("only allows one reply composer open at a time", async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadViewer
+        messages={[rootMessage, childMessage]}
+        threadSubject="Thread Subject"
+        groupEmail="test-group@googlegroups.com"
+        onReplySend={vi.fn().mockResolvedValue(true)}
+      />,
+    );
+
+    const replyButtons = screen.getAllByRole("button", { name: /reply/i });
+
+    // Open reply on first message
+    await user.click(replyButtons[0]);
+    expect(
+      screen.getByPlaceholderText(/write your reply/i),
+    ).toBeInTheDocument();
+
+    // Open reply on second message (should switch)
+    await user.click(replyButtons[1]);
+    // Only one composer should exist
+    const textareas = screen.getAllByPlaceholderText(/write your reply/i);
+    expect(textareas).toHaveLength(1);
+  });
 });

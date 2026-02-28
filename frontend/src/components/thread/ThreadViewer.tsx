@@ -6,6 +6,7 @@
  * - Collapse/expand for thread branches
  * - Ghost messages rendered with MissingMessageGhost
  * - Regular messages rendered with MessageCard
+ * - Reply composer integration (only one open at a time)
  */
 
 "use client";
@@ -14,10 +15,15 @@ import { useState, useMemo } from "react";
 import type { ThreadMessageData } from "@/lib/hooks/useThreads";
 import { MessageCard } from "./MessageCard";
 import { MissingMessageGhost } from "./MissingMessageGhost";
+import { ReplyComposer } from "./ReplyComposer";
 
 interface ThreadViewerProps {
   messages: ThreadMessageData[];
   threadSubject: string;
+  groupEmail?: string;
+  onReplySend?: (parentMessageId: string, bodyText: string) => Promise<boolean>;
+  replyIsLoading?: boolean;
+  replyError?: string | null;
 }
 
 /**
@@ -56,8 +62,16 @@ function getDescendantIds(
   return descendants;
 }
 
-export function ThreadViewer({ messages, threadSubject }: ThreadViewerProps) {
+export function ThreadViewer({
+  messages,
+  threadSubject,
+  groupEmail,
+  onReplySend,
+  replyIsLoading,
+  replyError,
+}: ThreadViewerProps) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const [replyToMessageId, setReplyToMessageId] = useState<string | null>(null);
 
   const parentIds = useMemo(() => getParentIds(messages), [messages]);
 
@@ -85,6 +99,23 @@ export function ThreadViewer({ messages, threadSubject }: ThreadViewerProps) {
     });
   }
 
+  function handleReplyClick(messageId: string) {
+    setReplyToMessageId((prev) => (prev === messageId ? null : messageId));
+  }
+
+  function handleReplyCancel() {
+    setReplyToMessageId(null);
+  }
+
+  async function handleReplySend(bodyText: string): Promise<boolean> {
+    if (!onReplySend || !replyToMessageId) return false;
+    const success = await onReplySend(replyToMessageId, bodyText);
+    if (success) {
+      setReplyToMessageId(null);
+    }
+    return success;
+  }
+
   return (
     <div className="space-y-2">
       {messages.map((msg) => {
@@ -93,6 +124,7 @@ export function ThreadViewer({ messages, threadSubject }: ThreadViewerProps) {
         const hasChildren = parentIds.has(msg.id);
         const isCollapsed = collapsedIds.has(msg.id);
         const indentPx = msg.depth * 24;
+        const isReplyOpen = replyToMessageId === msg.id;
 
         return (
           <div
@@ -120,10 +152,29 @@ export function ThreadViewer({ messages, threadSubject }: ThreadViewerProps) {
                 {msg.is_ghost ? (
                   <MissingMessageGhost />
                 ) : (
-                  <MessageCard
-                    message={msg}
-                    threadSubject={threadSubject}
-                  />
+                  <>
+                    <MessageCard
+                      message={msg}
+                      threadSubject={threadSubject}
+                      onReply={() => handleReplyClick(msg.id)}
+                    />
+                    {isReplyOpen && groupEmail && (
+                      <ReplyComposer
+                        parentMessage={{
+                          id: msg.id,
+                          sender_email: msg.sender_email,
+                          sender_name: msg.sender_name,
+                          body_text: msg.body_text,
+                          gmail_date: msg.gmail_date,
+                        }}
+                        groupEmail={groupEmail}
+                        onSend={handleReplySend}
+                        onCancel={handleReplyCancel}
+                        isLoading={replyIsLoading ?? false}
+                        error={replyError}
+                      />
+                    )}
+                  </>
                 )}
               </div>
             </div>

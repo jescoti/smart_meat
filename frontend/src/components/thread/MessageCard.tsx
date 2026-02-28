@@ -2,8 +2,8 @@
  * MessageCard -- renders a single message in a thread.
  *
  * Displays sender info, date, subject (if different from thread),
- * and message body (HTML or plain text). Includes a placeholder
- * Reply button for future WU-11 implementation.
+ * and message body (HTML or plain text). Includes a Reply button
+ * that triggers the onReply callback when clicked.
  */
 
 import type { ThreadMessageData } from "@/lib/hooks/useThreads";
@@ -11,6 +11,7 @@ import type { ThreadMessageData } from "@/lib/hooks/useThreads";
 interface MessageCardProps {
   message: ThreadMessageData;
   threadSubject: string;
+  onReply?: () => void;
 }
 
 /**
@@ -28,7 +29,11 @@ function formatDate(isoDate: string | null): string {
   });
 }
 
-export function MessageCard({ message, threadSubject }: MessageCardProps) {
+export function MessageCard({
+  message,
+  threadSubject,
+  onReply,
+}: MessageCardProps) {
   const displayName = message.sender_name ?? message.sender_email;
   const showSubject =
     message.subject !== threadSubject && message.subject.length > 0;
@@ -73,6 +78,7 @@ export function MessageCard({ message, threadSubject }: MessageCardProps) {
         <button
           type="button"
           className="rounded px-3 py-1 text-sm text-blue-600 hover:bg-blue-50"
+          onClick={onReply}
         >
           Reply
         </button>

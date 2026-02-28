@@ -537,3 +537,88 @@ class TestExceptionHierarchy:
     def test_gmail_auth_error_has_401_status(self) -> None:
         err = GmailAuthError()
         assert err.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# send_message
+# ---------------------------------------------------------------------------
+
+
+class TestSendMessage:
+    """Tests for GmailClient.send_message()."""
+
+    async def test_sends_raw_message_and_returns_response(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        response_data = {"id": "sent-msg-id", "threadId": "thread-id", "labelIds": ["SENT"]}
+        mock_client.post.return_value = _make_mock_response(json_data=response_data)
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        result = await client.send_message("raw-rfc2822-message-content")
+
+        assert result["id"] == "sent-msg-id"
+        assert result["threadId"] == "thread-id"
+
+    async def test_calls_correct_url(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post.return_value = _make_mock_response(json_data={"id": "sent"})
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        await client.send_message("raw-message")
+
+        call_args = mock_client.post.call_args
+        url = call_args[0][0]
+        assert url == f"{_BASE_URL}/messages/send"
+
+    async def test_sends_base64url_encoded_body(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post.return_value = _make_mock_response(json_data={"id": "sent"})
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        await client.send_message("From: test@example.com\r\nSubject: Test\r\n\r\nBody")
+
+        call_args = mock_client.post.call_args
+        json_body = call_args.kwargs.get("json") or call_args[1].get("json")
+        assert "raw" in json_body
+        # The raw value should be a base64url-encoded string
+        import base64
+        decoded = base64.urlsafe_b64decode(json_body["raw"] + "==").decode("utf-8")
+        assert "From: test@example.com" in decoded
+
+    async def test_sends_authorization_header(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        mock_client.post.return_value = _make_mock_response(json_data={"id": "sent"})
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        await client.send_message("raw-message")
+
+        call_kwargs = mock_client.post.call_args
+        headers = call_kwargs.kwargs.get("headers") or call_kwargs[1].get("headers")
+        assert headers["Authorization"] == f"Bearer {ACCESS_TOKEN}"
+
+    async def test_raises_auth_error_on_401(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        resp = _make_mock_response(status_code=401)
+        mock_client.post.return_value = resp
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        with pytest.raises(GmailAuthError):
+            await client.send_message("raw-message")
+
+    async def test_raises_rate_limit_error_on_429(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        resp = _make_mock_response(status_code=429)
+        resp.headers = {"Retry-After": "15"}
+        mock_client.post.return_value = resp
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        with pytest.raises(GmailRateLimitError):
+            await client.send_message("raw-message")
+
+    async def test_raises_api_error_on_500(self) -> None:
+        mock_client = AsyncMock(spec=httpx.AsyncClient)
+        resp = _make_mock_response(status_code=500)
+        mock_client.post.return_value = resp
+
+        client = GmailClient(ACCESS_TOKEN, client=mock_client)
+        with pytest.raises(GmailAPIError):
+            await client.send_message("raw-message")
