@@ -9,6 +9,7 @@ from fastapi import APIRouter
 
 from app.api.consent import create_consent_router
 from app.api.groups import create_groups_router
+from app.api.knowledge import create_knowledge_router
 from app.api.messages import create_messages_router
 from app.api.reply import create_reply_router
 from app.api.search import create_search_router
@@ -33,5 +34,6 @@ api_router.include_router(
     )
 )
 api_router.include_router(create_messages_router())
+api_router.include_router(create_knowledge_router())
 api_router.include_router(create_reply_router())
 api_router.include_router(create_search_router())
