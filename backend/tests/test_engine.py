@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from app.db.engine import create_engine, get_session, session_factory
+from app.db.engine import create_engine, dispose_db, get_session, init_db, session_factory
 
 # ---------------------------------------------------------------------------
 # Engine creation
@@ -84,6 +84,101 @@ class TestSessionFactory:
 
         # async_sessionmaker stores kw in its internal dict
         assert factory.kw.get("expire_on_commit") is False
+
+
+# ---------------------------------------------------------------------------
+# init_db / dispose_db
+# ---------------------------------------------------------------------------
+
+
+class TestInitDb:
+    """Tests for the init_db() function."""
+
+    @patch("app.db.engine._create_async_engine")
+    def test_init_db_sets_session_factory(self, mock_create: MagicMock) -> None:
+        """init_db should set the module-level _session_factory."""
+        import app.db.engine as engine_module
+
+        mock_engine = MagicMock(spec=AsyncEngine)
+        mock_create.return_value = mock_engine
+
+        old_factory = engine_module._session_factory
+        try:
+            init_db("postgresql+asyncpg://localhost/test")
+            assert engine_module._session_factory is not None
+            assert isinstance(engine_module._session_factory, async_sessionmaker)
+        finally:
+            engine_module._session_factory = old_factory
+
+    @patch("app.db.engine._create_async_engine")
+    def test_init_db_stores_engine(self, mock_create: MagicMock) -> None:
+        """init_db should store the engine in _engine."""
+        import app.db.engine as engine_module
+
+        mock_engine = MagicMock(spec=AsyncEngine)
+        mock_create.return_value = mock_engine
+
+        old_engine = getattr(engine_module, "_engine", None)
+        old_factory = engine_module._session_factory
+        try:
+            init_db("postgresql+asyncpg://localhost/test")
+            assert engine_module._engine is mock_engine
+        finally:
+            engine_module._engine = old_engine
+            engine_module._session_factory = old_factory
+
+
+class TestDisposeDb:
+    """Tests for the dispose_db() function."""
+
+    @pytest.mark.asyncio
+    async def test_dispose_db_disposes_engine(self) -> None:
+        """dispose_db should call engine.dispose()."""
+        import app.db.engine as engine_module
+
+        mock_engine = AsyncMock(spec=AsyncEngine)
+        old_engine = getattr(engine_module, "_engine", None)
+        old_factory = engine_module._session_factory
+        try:
+            engine_module._engine = mock_engine
+            await dispose_db()
+            mock_engine.dispose.assert_awaited_once()
+        finally:
+            engine_module._engine = old_engine
+            engine_module._session_factory = old_factory
+
+    @pytest.mark.asyncio
+    async def test_dispose_db_clears_state(self) -> None:
+        """dispose_db should reset _engine and _session_factory to None."""
+        import app.db.engine as engine_module
+
+        mock_engine = AsyncMock(spec=AsyncEngine)
+        old_engine = getattr(engine_module, "_engine", None)
+        old_factory = engine_module._session_factory
+        try:
+            engine_module._engine = mock_engine
+            engine_module._session_factory = MagicMock()
+            await dispose_db()
+            assert engine_module._engine is None
+            assert engine_module._session_factory is None
+        finally:
+            engine_module._engine = old_engine
+            engine_module._session_factory = old_factory
+
+    @pytest.mark.asyncio
+    async def test_dispose_db_noop_when_no_engine(self) -> None:
+        """dispose_db should be safe to call when no engine is initialized."""
+        import app.db.engine as engine_module
+
+        old_engine = getattr(engine_module, "_engine", None)
+        old_factory = engine_module._session_factory
+        try:
+            engine_module._engine = None
+            # Should not raise
+            await dispose_db()
+        finally:
+            engine_module._engine = old_engine
+            engine_module._session_factory = old_factory
 
 
 # ---------------------------------------------------------------------------

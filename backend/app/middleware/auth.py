@@ -23,6 +23,7 @@ _SKIP_PATHS: frozenset[str] = frozenset(
         "/api/auth/login",
         "/api/auth/callback",
         "/api/auth/refresh",
+        "/api/trigger-error",
     }
 )
 

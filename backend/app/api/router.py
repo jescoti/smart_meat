@@ -1,8 +1,11 @@
 """API router aggregation.
 
-Provides a single ``api_router`` that aggregates all sub-routers under the
-``/api`` prefix.  This router is designed to be included in the FastAPI app
-instance created in ``app.main``.
+Provides a single ``api_router`` that aggregates all sub-routers.
+Sub-routers already include ``/api/`` in their own prefixes, so this
+router has no prefix to avoid double-prefixing (``/api/api/``).
+
+This router is designed to be included in the FastAPI app instance
+created in ``app.main``.
 """
 
 from fastapi import APIRouter
@@ -17,14 +20,7 @@ from app.api.reply import create_reply_router
 from app.api.search import create_search_router
 from app.config import settings
 
-api_router = APIRouter(prefix="/api")
-
-
-@api_router.get("/health")
-async def health() -> dict[str, str]:
-    """Liveness probe — returns {"status": "ok"} with HTTP 200."""
-    return {"status": "ok"}
-
+api_router = APIRouter()
 
 # Wire up sub-routers
 api_router.include_router(
@@ -34,6 +30,7 @@ api_router.include_router(
         google_client_id=settings.GOOGLE_CLIENT_ID,
         google_client_secret=settings.GOOGLE_CLIENT_SECRET,
         google_redirect_uri=settings.GOOGLE_REDIRECT_URI,
+        frontend_url=settings.FRONTEND_URL,
     )
 )
 api_router.include_router(create_consent_router())

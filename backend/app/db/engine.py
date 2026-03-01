@@ -3,6 +3,8 @@
 Provides:
 - create_engine(): create an async engine from a database URL
 - session_factory(): create an async sessionmaker bound to an engine
+- init_db(): initialize engine + session factory (called at app startup)
+- dispose_db(): dispose engine and clear state (called at app shutdown)
 - get_session(): async generator yielding sessions for FastAPI dependency injection
 """
 
@@ -22,7 +24,8 @@ from sqlalchemy.ext.asyncio import (
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-# Module-level session factory, set during app startup via init_db().
+# Module-level state, set during app startup via init_db().
+_engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
@@ -57,6 +60,29 @@ def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
         class_=AsyncSession,
         expire_on_commit=False,
     )
+
+
+def init_db(database_url: str) -> None:
+    """Initialize the database engine and session factory.
+
+    Called once during app startup in the lifespan context manager.
+    """
+    global _engine, _session_factory
+    _engine = create_engine(database_url)
+    _session_factory = session_factory(_engine)
+
+
+async def dispose_db() -> None:
+    """Dispose the database engine and clear module-level state.
+
+    Called once during app shutdown in the lifespan context manager.
+    Safe to call even if init_db() was never called.
+    """
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+    _engine = None
+    _session_factory = None
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

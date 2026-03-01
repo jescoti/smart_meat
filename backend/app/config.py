@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str
     CLAUDE_MODEL: str = "claude-sonnet-4-5-20250514"
 
+    # Frontend URL for OAuth callback redirects
+    FRONTEND_URL: str = "http://localhost:3000"
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 

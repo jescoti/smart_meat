@@ -15,6 +15,22 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
+from app.api.router import api_router
+from app.db.engine import dispose_db, get_session, init_db
+from app.middleware.auth import AuthMiddleware
+
+# Session dependency placeholders from each router module — these will be
+# overridden with the real get_session after the app is created.
+from app.api.auth import _get_session_dependency as _auth_session_dep
+from app.api.consent import _get_session_dependency as _consent_session_dep
+from app.api.dashboard import _get_session_dependency as _dashboard_session_dep
+from app.api.groups import _get_session_dependency as _groups_session_dep
+from app.api.knowledge import _get_session_dependency as _knowledge_session_dep
+from app.api.messages import _get_session_dependency as _messages_session_dep
+from app.api.reply import _get_session_dependency as _reply_session_dep
+from app.api.search import _get_session_dependency as _search_session_dep
+from app.middleware.consent import _get_session_dependency as _consent_mw_session_dep
+
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     """Catch all unhandled exceptions and return a safe generic error response.
@@ -45,12 +61,14 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application startup and shutdown.
 
-    Database engine setup and teardown will be added here once the models
-    layer is implemented (WU-2).
+    Initializes the database engine on startup and disposes it on shutdown.
     """
-    # Startup: placeholder for async DB engine initialisation
+    from app.config import Settings
+
+    _settings = Settings()  # type: ignore[call-arg]
+    init_db(_settings.DATABASE_URL)
     yield
-    # Shutdown: placeholder for async DB engine disposal
+    await dispose_db()
 
 
 app = FastAPI(
@@ -60,8 +78,28 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# Middleware — order matters: ErrorHandlerMiddleware must be added LAST so
-# it is the outermost wrapper around all other middleware.
+# Include the aggregated API router
+# ---------------------------------------------------------------------------
+app.include_router(api_router)
+
+# ---------------------------------------------------------------------------
+# Override all session dependency placeholders with the real get_session
+# ---------------------------------------------------------------------------
+app.dependency_overrides[_auth_session_dep] = get_session
+app.dependency_overrides[_consent_session_dep] = get_session
+app.dependency_overrides[_dashboard_session_dep] = get_session
+app.dependency_overrides[_groups_session_dep] = get_session
+app.dependency_overrides[_knowledge_session_dep] = get_session
+app.dependency_overrides[_messages_session_dep] = get_session
+app.dependency_overrides[_reply_session_dep] = get_session
+app.dependency_overrides[_search_session_dep] = get_session
+app.dependency_overrides[_consent_mw_session_dep] = get_session
+
+# ---------------------------------------------------------------------------
+# Middleware — order matters in Starlette:
+#   add_middleware adds to FRONT of the chain, so the LAST added is outermost.
+#   We want: CORS (outermost) → AuthMiddleware → ErrorHandler (innermost)
+#   So we add: ErrorHandler first, then Auth, then CORS last.
 # ---------------------------------------------------------------------------
 
 # Import settings lazily to allow tests to patch env vars before import.
@@ -69,6 +107,13 @@ from app.config import Settings  # noqa: E402  (placed after app creation)
 
 _settings = Settings()  # type: ignore[call-arg]
 
+# ErrorHandler — innermost, catches unhandled exceptions
+app.add_middleware(ErrorHandlerMiddleware)
+
+# AuthMiddleware — validates JWT cookies, sets request.state.user_id
+app.add_middleware(AuthMiddleware, secret_key=_settings.SECRET_KEY)
+
+# CORS — outermost, must handle preflight OPTIONS before auth checks
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_settings.CORS_ORIGINS,
@@ -77,12 +122,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Added last = executed first in the middleware stack
-app.add_middleware(ErrorHandlerMiddleware)
-
 
 # ---------------------------------------------------------------------------
-# Routes
+# Standalone routes (not part of the aggregated router)
 # ---------------------------------------------------------------------------
 
 

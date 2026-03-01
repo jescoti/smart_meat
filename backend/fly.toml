@@ -5,6 +5,7 @@ primary_region = 'sjc'
 
 [env]
   CORS_ORIGINS = '["https://smart-meat-web.fly.dev"]'
+  FRONTEND_URL = 'https://smart-meat-web.fly.dev'
   GOOGLE_REDIRECT_URI = 'https://smart-meat-api.fly.dev/api/auth/callback'
   CLAUDE_MODEL = 'claude-sonnet-4-5-20250514'
 

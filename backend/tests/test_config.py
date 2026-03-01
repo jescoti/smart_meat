@@ -47,6 +47,7 @@ def test_settings_defaults() -> None:
 
         assert settings.GOOGLE_REDIRECT_URI == "http://localhost:8000/api/auth/callback"
         assert settings.CLAUDE_MODEL == "claude-sonnet-4-5-20250514"
+        assert settings.FRONTEND_URL == "http://localhost:3000"
         assert settings.CORS_ORIGINS == ["http://localhost:3000"]
         assert settings.JWT_ACCESS_TOKEN_TTL_MINUTES == 15
         assert settings.JWT_REFRESH_TOKEN_TTL_DAYS == 7

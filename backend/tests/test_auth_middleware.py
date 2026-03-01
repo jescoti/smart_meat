@@ -38,6 +38,10 @@ def _create_test_app() -> FastAPI:
     async def protected(request: Request) -> dict[str, str]:
         return {"user_id": request.state.user_id}
 
+    @app.get("/api/trigger-error")
+    async def trigger_error() -> dict[str, str]:
+        return {"status": "trigger-error"}
+
     @app.get("/non-api/page")
     async def non_api() -> dict[str, str]:
         return {"status": "public"}
@@ -75,6 +79,10 @@ class TestAuthMiddlewareSkipPaths:
 
     async def test_refresh_endpoint_no_auth_required(self, client: AsyncClient) -> None:
         resp = await client.post("/api/auth/refresh")
+        assert resp.status_code == 200
+
+    async def test_trigger_error_no_auth_required(self, client: AsyncClient) -> None:
+        resp = await client.get("/api/trigger-error")
         assert resp.status_code == 200
 
     async def test_non_api_path_no_auth_required(self, client: AsyncClient) -> None:
