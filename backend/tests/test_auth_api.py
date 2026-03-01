@@ -857,3 +857,86 @@ class TestLogoutEndpoint:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post("/api/auth/logout")
         assert resp.status_code == 200
+
+
+def _make_dev_test_app(*, session_override: object | None = None):
+    """Create a test app with dev_login_enabled=True."""
+    from fastapi import FastAPI
+
+    from app.api.auth import _get_session_dependency, create_auth_router
+
+    app = FastAPI()
+    router = create_auth_router(
+        secret_key=SECRET_KEY,
+        encryption_key=ENCRYPTION_KEY,
+        google_client_id=CLIENT_ID,
+        google_client_secret=CLIENT_SECRET,
+        google_redirect_uri=REDIRECT_URI,
+        frontend_url="http://localhost:3000",
+        dev_login_enabled=True,
+    )
+    app.include_router(router)
+
+    if session_override is not None:
+        app.dependency_overrides[_get_session_dependency] = lambda: session_override
+
+    return app
+
+
+class TestDevLogin:
+    """Tests for GET /api/auth/dev-login."""
+
+    async def test_dev_login_not_registered_when_disabled(self) -> None:
+        """When dev_login_enabled=False, the endpoint should 404."""
+        app = _make_test_app()
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test", follow_redirects=False
+        ) as client:
+            resp = await client.get("/api/auth/dev-login")
+        assert resp.status_code == 404
+
+    async def test_dev_login_creates_user_and_redirects(self) -> None:
+        """First dev-login creates a user, sets cookies, redirects to dashboard."""
+        mock_session = _make_mock_session()
+        mock_scalar_result = MagicMock()
+        mock_scalar_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_scalar_result
+        mock_session.refresh = AsyncMock()
+
+        app = _make_dev_test_app(session_override=mock_session)
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test", follow_redirects=False
+        ) as client:
+            resp = await client.get("/api/auth/dev-login")
+
+        assert resp.status_code == 307
+        assert "/dashboard" in resp.headers["location"]
+        cookies = resp.headers.get_list("set-cookie")
+        cookie_names = [c.split("=")[0] for c in cookies]
+        assert "access_token" in cookie_names
+        assert "refresh_token" in cookie_names
+        assert "csrf_token" in cookie_names
+
+    async def test_dev_login_reuses_existing_user(self) -> None:
+        """Subsequent dev-logins reuse the existing dev user."""
+        existing_user = _make_mock_user(google_id="dev-user-000", email="dev@example.com")
+
+        mock_session = _make_mock_session()
+        mock_scalar_result = MagicMock()
+        mock_scalar_result.scalar_one_or_none.return_value = existing_user
+        mock_session.execute.return_value = mock_scalar_result
+
+        app = _make_dev_test_app(session_override=mock_session)
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(
+            transport=transport, base_url="http://test", follow_redirects=False
+        ) as client:
+            resp = await client.get("/api/auth/dev-login")
+
+        assert resp.status_code == 307
+        # Should NOT call session.add for existing user
+        mock_session.add.assert_not_called()

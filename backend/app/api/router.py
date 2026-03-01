@@ -31,6 +31,7 @@ api_router.include_router(
         google_client_secret=settings.GOOGLE_CLIENT_SECRET,
         google_redirect_uri=settings.GOOGLE_REDIRECT_URI,
         frontend_url=settings.FRONTEND_URL,
+        dev_login_enabled=settings.DEV_LOGIN_ENABLED,
     )
 )
 api_router.include_router(create_consent_router())

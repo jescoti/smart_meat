@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     # Frontend URL for OAuth callback redirects
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Dev login — bypasses Google OAuth for local/staging debugging
+    DEV_LOGIN_ENABLED: bool = False
+
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 

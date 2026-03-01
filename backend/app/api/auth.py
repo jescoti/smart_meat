@@ -52,6 +52,7 @@ def create_auth_router(
     jwt_access_ttl_minutes: int = 15,
     jwt_refresh_ttl_days: int = 7,
     frontend_url: str = "http://localhost:3000",
+    dev_login_enabled: bool = False,
 ) -> APIRouter:
     """Create an APIRouter with OAuth endpoints, configured with the given settings.
 
@@ -384,6 +385,72 @@ def create_auth_router(
         # For now, logout is stateless and best-effort.
 
         return response
+
+    if dev_login_enabled:
+
+        @router.get("/dev-login")
+        async def dev_login(
+            session: AsyncSession = _session_dep,
+        ) -> Response:
+            """Auto-login as a dev user — no Google OAuth required.
+
+            Creates the dev user on first use, then issues JWT cookies
+            and redirects to the dashboard.  Only available when
+            DEV_LOGIN_ENABLED=true.
+            """
+            import uuid
+
+            dev_google_id = "dev-user-000"
+            result = await session.execute(
+                select(User).where(User.google_id == dev_google_id)
+            )
+            user = result.scalar_one_or_none()
+
+            if user is None:
+                user = User(
+                    id=uuid.uuid4(),
+                    google_id=dev_google_id,
+                    email="dev@example.com",
+                    display_name="Dev User",
+                    avatar_url=None,
+                    llm_consent_given_at=datetime.now(tz=UTC),
+                )
+                session.add(user)
+                await session.commit()
+                await session.refresh(user)
+
+            jwt_access = create_access_token(str(user.id), secret_key, jwt_access_ttl_minutes)
+            jwt_refresh = create_refresh_token(str(user.id), secret_key, jwt_refresh_ttl_days)
+            csrf_token = generate_csrf_token()
+
+            redirect_url = f"{frontend_url}/dashboard"
+            response = RedirectResponse(url=redirect_url)
+            response.set_cookie(
+                key="access_token",
+                value=jwt_access,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=jwt_access_ttl_minutes * 60,
+            )
+            response.set_cookie(
+                key="refresh_token",
+                value=jwt_refresh,
+                httponly=True,
+                secure=True,
+                samesite="lax",
+                max_age=jwt_refresh_ttl_days * 24 * 60 * 60,
+            )
+            response.set_cookie(
+                key="csrf_token",
+                value=csrf_token,
+                httponly=False,
+                secure=True,
+                samesite="lax",
+                max_age=jwt_access_ttl_minutes * 60,
+            )
+
+            return response
 
     return router
 
