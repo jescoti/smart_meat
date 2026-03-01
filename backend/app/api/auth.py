@@ -234,7 +234,7 @@ def create_auth_router(
             value=jwt_access,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite="none",
             max_age=jwt_access_ttl_minutes * 60,
         )
         response.set_cookie(
@@ -242,7 +242,7 @@ def create_auth_router(
             value=jwt_refresh,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite="none",
             max_age=jwt_refresh_ttl_days * 24 * 60 * 60,
         )
         response.set_cookie(
@@ -250,7 +250,7 @@ def create_auth_router(
             value=csrf_token,
             httponly=False,
             secure=True,
-            samesite="lax",
+            samesite="none",
             max_age=jwt_refresh_ttl_days * 24 * 60 * 60,
         )
 
@@ -356,7 +356,7 @@ def create_auth_router(
             value=jwt_access,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite="none",
             max_age=jwt_access_ttl_minutes * 60,
         )
         response.set_cookie(
@@ -364,7 +364,7 @@ def create_auth_router(
             value=jwt_refresh,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite="none",
             max_age=jwt_refresh_ttl_days * 24 * 60 * 60,
         )
 
@@ -430,7 +430,7 @@ def create_auth_router(
                 value=jwt_access,
                 httponly=True,
                 secure=True,
-                samesite="lax",
+                samesite="none",
                 max_age=jwt_access_ttl_minutes * 60,
             )
             response.set_cookie(
@@ -438,7 +438,7 @@ def create_auth_router(
                 value=jwt_refresh,
                 httponly=True,
                 secure=True,
-                samesite="lax",
+                samesite="none",
                 max_age=jwt_refresh_ttl_days * 24 * 60 * 60,
             )
             response.set_cookie(
@@ -446,7 +446,7 @@ def create_auth_router(
                 value=csrf_token,
                 httponly=False,
                 secure=True,
-                samesite="lax",
+                samesite="none",
                 max_age=jwt_access_ttl_minutes * 60,
             )
 
