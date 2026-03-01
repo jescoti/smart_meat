@@ -455,7 +455,7 @@ class TestCallbackEndpoint:
 
     @patch("app.api.auth.google_auth.exchange_code_for_tokens")
     @patch("app.api.auth.google_auth.fetch_user_info")
-    async def test_callback_redirects_to_consent_when_no_llm_consent(
+    async def test_callback_redirects_to_dashboard_when_no_llm_consent(
         self,
         mock_fetch_user: AsyncMock,
         mock_exchange: AsyncMock,
@@ -470,38 +470,6 @@ class TestCallbackEndpoint:
         mock_scalar_result.scalar_one_or_none.return_value = None
         mock_session.execute.return_value = mock_scalar_result
         mock_user = _make_mock_user(llm_consent_given_at=None)
-        mock_session.merge.return_value = mock_user
-
-        app = _make_test_app(session_override=mock_session)
-
-        state = _make_valid_state()
-        transport = ASGITransport(app=app)
-        async with AsyncClient(
-            transport=transport, base_url="http://test", follow_redirects=False
-        ) as client:
-            resp = await client.get(
-                "/api/auth/callback", params={"code": "auth-code-123", "state": state}
-            )
-
-        assert "/consent" in resp.headers["location"]
-
-    @patch("app.api.auth.google_auth.exchange_code_for_tokens")
-    @patch("app.api.auth.google_auth.fetch_user_info")
-    async def test_callback_redirects_to_dashboard_when_consent_given(
-        self,
-        mock_fetch_user: AsyncMock,
-        mock_exchange: AsyncMock,
-        google_tokens: dict,
-        google_user_info: dict,
-    ) -> None:
-        mock_exchange.return_value = google_tokens
-        mock_fetch_user.return_value = google_user_info
-
-        mock_session = _make_mock_session()
-        mock_scalar_result = MagicMock()
-        mock_scalar_result.scalar_one_or_none.return_value = None
-        mock_session.execute.return_value = mock_scalar_result
-        mock_user = _make_mock_user(llm_consent_given_at=datetime.now(tz=UTC))
         mock_session.merge.return_value = mock_user
 
         app = _make_test_app(session_override=mock_session)

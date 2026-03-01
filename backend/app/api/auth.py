@@ -221,11 +221,8 @@ def create_auth_router(
         jwt_refresh = create_refresh_token(str(user.id), secret_key, jwt_refresh_ttl_days)
         csrf_token = generate_csrf_token()
 
-        # Determine redirect destination
-        if user.llm_consent_given_at is None:
-            redirect_path = "/consent"
-        else:
-            redirect_path = "/dashboard"
+        # Always redirect to dashboard after login
+        redirect_path = "/dashboard"
 
         redirect_url = f"{frontend_url}{redirect_path}"
         response = RedirectResponse(url=redirect_url)
