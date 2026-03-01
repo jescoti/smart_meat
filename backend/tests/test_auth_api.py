@@ -103,6 +103,113 @@ def _make_mock_user(
     return user
 
 
+class TestMeEndpoint:
+    """Tests for GET /api/auth/me."""
+
+    async def test_me_returns_user_profile(self) -> None:
+        """Authenticated request returns user profile with correct shape."""
+        mock_user = _make_mock_user()
+        mock_session = _make_mock_session()
+        mock_scalar_result = MagicMock()
+        mock_scalar_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute.return_value = mock_scalar_result
+
+        from fastapi import FastAPI
+        from app.api.auth import _get_session_dependency, create_auth_router
+        from app.middleware.auth import AuthMiddleware
+
+        app = FastAPI()
+        router = create_auth_router(
+            secret_key=SECRET_KEY,
+            encryption_key=ENCRYPTION_KEY,
+            google_client_id=CLIENT_ID,
+            google_client_secret=CLIENT_SECRET,
+            google_redirect_uri=REDIRECT_URI,
+        )
+        app.include_router(router)
+        app.add_middleware(AuthMiddleware, secret_key=SECRET_KEY)
+        app.dependency_overrides[_get_session_dependency] = lambda: mock_session
+
+        token = create_access_token(str(USER_ID), SECRET_KEY)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            client.cookies.set("access_token", token)
+            resp = await client.get("/api/auth/me")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == str(USER_ID)
+        assert data["email"] == "user@example.com"
+        assert data["name"] == "Test User"
+        assert data["avatarUrl"] == "https://example.com/photo.jpg"
+
+    async def test_me_without_cookie_returns_401(self) -> None:
+        """Unauthenticated request returns 401."""
+        from fastapi import FastAPI
+        from app.api.auth import create_auth_router
+        from app.middleware.auth import AuthMiddleware
+
+        app = FastAPI()
+        router = create_auth_router(
+            secret_key=SECRET_KEY,
+            encryption_key=ENCRYPTION_KEY,
+            google_client_id=CLIENT_ID,
+            google_client_secret=CLIENT_SECRET,
+            google_redirect_uri=REDIRECT_URI,
+        )
+        app.include_router(router)
+        app.add_middleware(AuthMiddleware, secret_key=SECRET_KEY)
+
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/auth/me")
+
+        assert resp.status_code == 401
+
+    async def test_me_without_user_id_in_state_returns_401(self) -> None:
+        """If request.state has no user_id (no middleware), endpoint returns 401."""
+        mock_session = _make_mock_session()
+        app = _make_test_app(session_override=mock_session)
+
+        # No AuthMiddleware added — request.state won't have user_id
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            resp = await client.get("/api/auth/me")
+
+        assert resp.status_code == 401
+
+    async def test_me_user_not_found_returns_404(self) -> None:
+        """Valid JWT but deleted user returns 404."""
+        mock_session = _make_mock_session()
+        mock_scalar_result = MagicMock()
+        mock_scalar_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = mock_scalar_result
+
+        from fastapi import FastAPI
+        from app.api.auth import _get_session_dependency, create_auth_router
+        from app.middleware.auth import AuthMiddleware
+
+        app = FastAPI()
+        router = create_auth_router(
+            secret_key=SECRET_KEY,
+            encryption_key=ENCRYPTION_KEY,
+            google_client_id=CLIENT_ID,
+            google_client_secret=CLIENT_SECRET,
+            google_redirect_uri=REDIRECT_URI,
+        )
+        app.include_router(router)
+        app.add_middleware(AuthMiddleware, secret_key=SECRET_KEY)
+        app.dependency_overrides[_get_session_dependency] = lambda: mock_session
+
+        token = create_access_token(str(USER_ID), SECRET_KEY)
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            client.cookies.set("access_token", token)
+            resp = await client.get("/api/auth/me")
+
+        assert resp.status_code == 404
+
+
 class TestLoginEndpoint:
     """Tests for GET /api/auth/login."""
 

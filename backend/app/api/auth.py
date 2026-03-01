@@ -88,6 +88,39 @@ def create_auth_router(
 
     _session_dep = Depends(_get_session_dependency)
 
+    @router.get("/me")
+    async def me(
+        request: Request,
+        session: AsyncSession = _session_dep,
+    ) -> dict:
+        """Return the current authenticated user's profile.
+
+        Uses request.state.user_id set by AuthMiddleware. Returns 404
+        if the user_id from the JWT no longer exists in the database.
+        """
+        user_id = getattr(request.state, "user_id", None)
+        if user_id is None:
+            return JSONResponse(
+                status_code=401,
+                content={"error": "unauthorized", "message": "Not authenticated"},
+            )
+
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if user is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "not_found", "message": "User not found"},
+            )
+
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "name": user.display_name,
+            "avatarUrl": user.avatar_url,
+        }
+
     @router.get("/callback")
     async def callback(
         code: str | None = Query(default=None),
