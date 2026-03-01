@@ -17,23 +17,36 @@ from app.db.engine import _sanitize_url, create_engine, dispose_db, get_session,
 class TestSanitizeUrl:
     """Tests for _sanitize_url() — strips asyncpg-incompatible params."""
 
-    def test_strips_sslmode(self) -> None:
+    def test_strips_sslmode_and_returns_ssl_false(self) -> None:
         url = "postgresql+asyncpg://user:pass@host/db?sslmode=disable"
-        assert _sanitize_url(url) == "postgresql+asyncpg://user:pass@host/db"
+        clean_url, connect_args = _sanitize_url(url)
+        assert clean_url == "postgresql+asyncpg://user:pass@host/db"
+        assert connect_args == {"ssl": False}
 
     def test_preserves_other_params(self) -> None:
         url = "postgresql+asyncpg://host/db?sslmode=disable&application_name=test"
-        result = _sanitize_url(url)
-        assert "sslmode" not in result
-        assert "application_name=test" in result
+        clean_url, connect_args = _sanitize_url(url)
+        assert "sslmode" not in clean_url
+        assert "application_name=test" in clean_url
+        assert connect_args == {"ssl": False}
 
     def test_noop_when_no_query_string(self) -> None:
         url = "postgresql+asyncpg://host/db"
-        assert _sanitize_url(url) == url
+        clean_url, connect_args = _sanitize_url(url)
+        assert clean_url == url
+        assert connect_args == {}
 
     def test_noop_when_no_stripped_params(self) -> None:
         url = "postgresql+asyncpg://host/db?application_name=test"
-        assert _sanitize_url(url) == url
+        clean_url, connect_args = _sanitize_url(url)
+        assert clean_url == url
+        assert connect_args == {}
+
+    def test_sslmode_non_disable_produces_no_connect_args(self) -> None:
+        url = "postgresql+asyncpg://host/db?sslmode=require"
+        clean_url, connect_args = _sanitize_url(url)
+        assert "sslmode" not in clean_url
+        assert connect_args == {}
 
 
 # ---------------------------------------------------------------------------
@@ -77,14 +90,15 @@ class TestCreateEngine:
         assert call_kwargs.get("pool_pre_ping") is True
 
     @patch("app.db.engine._create_async_engine")
-    def test_strips_sslmode_before_passing_to_engine(self, mock_create: MagicMock) -> None:
-        """create_engine should strip sslmode from the URL for asyncpg compat."""
+    def test_strips_sslmode_and_passes_ssl_false(self, mock_create: MagicMock) -> None:
+        """create_engine should strip sslmode and pass ssl=False via connect_args."""
         mock_create.return_value = MagicMock(spec=AsyncEngine)
 
         create_engine("postgresql+asyncpg://localhost/test?sslmode=disable")
 
         call_args = mock_create.call_args
         assert "sslmode" not in call_args[0][0]
+        assert call_args[1]["connect_args"] == {"ssl": False}
 
     @patch("app.db.engine._create_async_engine")
     def test_returns_async_engine(self, mock_create: MagicMock) -> None:

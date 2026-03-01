@@ -35,21 +35,35 @@ _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
-def _sanitize_url(database_url: str) -> str:
+def _sanitize_url(database_url: str) -> tuple[str, dict[str, object]]:
     """Strip query parameters that asyncpg does not support.
 
     asyncpg uses its own ``ssl`` keyword argument and does not understand
     the ``sslmode`` parameter used by psycopg2 / libpq.  This function
-    removes those incompatible parameters so the same DATABASE_URL works
-    regardless of driver.
+    removes those incompatible parameters and returns asyncpg-compatible
+    ``connect_args`` so the same DATABASE_URL works regardless of driver.
+
+    Returns:
+        A tuple of (cleaned_url, connect_args).
     """
     parsed = urlparse(database_url)
     if not parsed.query:
-        return database_url
+        return database_url, {}
+
     params = parse_qs(parsed.query)
+    connect_args: dict[str, object] = {}
+
+    # Convert sslmode to asyncpg's ssl connect_arg
+    sslmode_values = params.pop("sslmode", None)
+    if sslmode_values:
+        sslmode = sslmode_values[0]
+        if sslmode == "disable":
+            connect_args["ssl"] = False
+
     filtered = {k: v for k, v in params.items() if k not in _STRIP_PARAMS}
     new_query = urlencode(filtered, doseq=True)
-    return urlunparse(parsed._replace(query=new_query))
+    cleaned_url = urlunparse(parsed._replace(query=new_query))
+    return cleaned_url, connect_args
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -62,10 +76,12 @@ def create_engine(database_url: str) -> AsyncEngine:
     Returns:
         An :class:`AsyncEngine` instance.
     """
+    clean_url, connect_args = _sanitize_url(database_url)
     return _create_async_engine(
-        _sanitize_url(database_url),
+        clean_url,
         echo=False,
         pool_pre_ping=True,
+        connect_args=connect_args,
     )
 
 
