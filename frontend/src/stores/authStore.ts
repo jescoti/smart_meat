@@ -7,7 +7,7 @@
 
 import { create } from "zustand";
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   name: string;
   email: string;
@@ -24,18 +24,27 @@ interface AuthState {
    */
   isAuthenticated: boolean;
 
+  /** True while the initial auth check is in progress. */
+  isLoading: boolean;
+
   /** Set the active user after successful authentication. */
   setUser: (user: AuthUser) => void;
 
   /** Clear the user on sign-out or session expiry. */
   clearUser: () => void;
+
+  /** Set the loading state for auth initialization. */
+  setLoading: (loading: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()((set) => ({
   user: null,
   isAuthenticated: false,
+  isLoading: true,
 
   setUser: (user) => set({ user, isAuthenticated: true }),
 
   clearUser: () => set({ user: null, isAuthenticated: false }),
+
+  setLoading: (loading) => set({ isLoading: loading }),
 }));

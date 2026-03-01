@@ -1,11 +1,9 @@
 /**
- * Tests for auth utilities — getLoginUrl, refreshToken, logout.
- *
- * TDD RED phase — these tests are written before the implementation.
+ * Tests for auth utilities — getLoginUrl, refreshToken, logout, fetchCurrentUser.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getLoginUrl, refreshToken, logout } from "./auth";
+import { getLoginUrl, refreshToken, logout, fetchCurrentUser } from "./auth";
 
 const mockFetch = vi.fn();
 
@@ -112,5 +110,80 @@ describe("logout", () => {
 
     // Logout should not throw — best-effort
     await expect(logout()).resolves.toBeUndefined();
+  });
+});
+
+describe("fetchCurrentUser", () => {
+  const mockUser = {
+    id: "user-1",
+    name: "Test User",
+    email: "test@example.com",
+    avatarUrl: "https://example.com/photo.jpg",
+  };
+
+  it("returns user on successful /api/auth/me response", async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify(mockUser), { status: 200 }),
+    );
+
+    const user = await fetchCurrentUser();
+    expect(user).toEqual(mockUser);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining("/api/auth/me"),
+      expect.objectContaining({ credentials: "include" }),
+    );
+  });
+
+  it("retries with token refresh on 401 then returns user", async () => {
+    mockFetch
+      // First call: /api/auth/me returns 401
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      // Second call: /api/auth/refresh returns 200
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
+      // Third call: /api/auth/me retry returns 200
+      .mockResolvedValueOnce(new Response(JSON.stringify(mockUser), { status: 200 }));
+
+    const user = await fetchCurrentUser();
+    expect(user).toEqual(mockUser);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("returns null when refresh fails after 401", async () => {
+    mockFetch
+      // First call: /api/auth/me returns 401
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      // Second call: /api/auth/refresh returns 401
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
+
+    const user = await fetchCurrentUser();
+    expect(user).toBeNull();
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns null when retry after refresh also fails", async () => {
+    mockFetch
+      // First call: /api/auth/me returns 401
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }))
+      // Second call: /api/auth/refresh returns 200
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: "ok" }), { status: 200 }))
+      // Third call: /api/auth/me retry returns 401 again
+      .mockResolvedValueOnce(new Response("unauthorized", { status: 401 }));
+
+    const user = await fetchCurrentUser();
+    expect(user).toBeNull();
+  });
+
+  it("returns null on network error", async () => {
+    mockFetch.mockRejectedValue(new Error("Network error"));
+
+    const user = await fetchCurrentUser();
+    expect(user).toBeNull();
+  });
+
+  it("returns null on non-401 error status", async () => {
+    mockFetch.mockResolvedValue(new Response("error", { status: 500 }));
+
+    const user = await fetchCurrentUser();
+    expect(user).toBeNull();
   });
 });

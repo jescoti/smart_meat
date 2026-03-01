@@ -1,5 +1,5 @@
 /**
- * Tests for authStore — written FIRST (TDD Red phase).
+ * Tests for authStore.
  *
  * Verifies that the store manages user identity without ever storing raw
  * access tokens or refresh tokens.
@@ -18,7 +18,7 @@ const MOCK_USER = {
 describe("authStore", () => {
   beforeEach(() => {
     // Reset store to initial state before each test
-    useAuthStore.setState({ user: null });
+    useAuthStore.setState({ user: null, isAuthenticated: false, isLoading: true });
   });
 
   describe("initial state", () => {
@@ -30,6 +30,11 @@ describe("authStore", () => {
     it("is not authenticated by default", () => {
       const { isAuthenticated } = useAuthStore.getState();
       expect(isAuthenticated).toBe(false);
+    });
+
+    it("is loading by default", () => {
+      const { isLoading } = useAuthStore.getState();
+      expect(isLoading).toBe(true);
     });
   });
 
@@ -76,6 +81,25 @@ describe("authStore", () => {
 
       const { isAuthenticated } = useAuthStore.getState();
       expect(isAuthenticated).toBe(false);
+    });
+  });
+
+  describe("setLoading", () => {
+    it("sets isLoading to false", () => {
+      const { setLoading } = useAuthStore.getState();
+      setLoading(false);
+
+      const { isLoading } = useAuthStore.getState();
+      expect(isLoading).toBe(false);
+    });
+
+    it("sets isLoading to true", () => {
+      useAuthStore.setState({ isLoading: false });
+      const { setLoading } = useAuthStore.getState();
+      setLoading(true);
+
+      const { isLoading } = useAuthStore.getState();
+      expect(isLoading).toBe(true);
     });
   });
 

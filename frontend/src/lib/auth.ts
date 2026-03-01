@@ -5,7 +5,10 @@
  * - getLoginUrl: fetches the Google OAuth authorization URL
  * - refreshToken: refreshes the JWT access token
  * - logout: clears the auth session
+ * - fetchCurrentUser: checks auth state and returns user profile
  */
+
+import type { AuthUser } from "@/stores/authStore";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -56,5 +59,42 @@ export async function logout(): Promise<void> {
     });
   } catch {
     // Best-effort logout — ignore errors
+  }
+}
+
+/**
+ * Fetch the current user's profile from /api/auth/me.
+ *
+ * If the initial request returns 401, attempts a token refresh and retries once.
+ * Returns null if the user is not authenticated or on any error.
+ */
+export async function fetchCurrentUser(): Promise<AuthUser | null> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/auth/me`, {
+      credentials: "include",
+    });
+
+    if (resp.ok) {
+      return await resp.json();
+    }
+
+    if (resp.status === 401) {
+      const refreshed = await refreshToken();
+      if (!refreshed) {
+        return null;
+      }
+
+      const retryResp = await fetch(`${API_BASE}/api/auth/me`, {
+        credentials: "include",
+      });
+
+      if (retryResp.ok) {
+        return await retryResp.json();
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
   }
 }
