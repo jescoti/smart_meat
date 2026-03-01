@@ -11,6 +11,7 @@ Provides:
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -21,12 +22,34 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine as _create_async_engine,
 )
 
+# Query parameters that asyncpg does not understand (they belong to
+# psycopg2 / libpq).  We silently strip them so the same DATABASE_URL
+# works with both drivers.
+_STRIP_PARAMS = frozenset({"sslmode"})
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 # Module-level state, set during app startup via init_db().
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+
+
+def _sanitize_url(database_url: str) -> str:
+    """Strip query parameters that asyncpg does not support.
+
+    asyncpg uses its own ``ssl`` keyword argument and does not understand
+    the ``sslmode`` parameter used by psycopg2 / libpq.  This function
+    removes those incompatible parameters so the same DATABASE_URL works
+    regardless of driver.
+    """
+    parsed = urlparse(database_url)
+    if not parsed.query:
+        return database_url
+    params = parse_qs(parsed.query)
+    filtered = {k: v for k, v in params.items() if k not in _STRIP_PARAMS}
+    new_query = urlencode(filtered, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
 
 
 def create_engine(database_url: str) -> AsyncEngine:
@@ -40,7 +63,7 @@ def create_engine(database_url: str) -> AsyncEngine:
         An :class:`AsyncEngine` instance.
     """
     return _create_async_engine(
-        database_url,
+        _sanitize_url(database_url),
         echo=False,
         pool_pre_ping=True,
     )

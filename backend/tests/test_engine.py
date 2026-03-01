@@ -7,7 +7,34 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from app.db.engine import create_engine, dispose_db, get_session, init_db, session_factory
+from app.db.engine import _sanitize_url, create_engine, dispose_db, get_session, init_db, session_factory
+
+# ---------------------------------------------------------------------------
+# URL sanitization
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeUrl:
+    """Tests for _sanitize_url() — strips asyncpg-incompatible params."""
+
+    def test_strips_sslmode(self) -> None:
+        url = "postgresql+asyncpg://user:pass@host/db?sslmode=disable"
+        assert _sanitize_url(url) == "postgresql+asyncpg://user:pass@host/db"
+
+    def test_preserves_other_params(self) -> None:
+        url = "postgresql+asyncpg://host/db?sslmode=disable&application_name=test"
+        result = _sanitize_url(url)
+        assert "sslmode" not in result
+        assert "application_name=test" in result
+
+    def test_noop_when_no_query_string(self) -> None:
+        url = "postgresql+asyncpg://host/db"
+        assert _sanitize_url(url) == url
+
+    def test_noop_when_no_stripped_params(self) -> None:
+        url = "postgresql+asyncpg://host/db?application_name=test"
+        assert _sanitize_url(url) == url
+
 
 # ---------------------------------------------------------------------------
 # Engine creation
@@ -48,6 +75,16 @@ class TestCreateEngine:
 
         call_kwargs = mock_create.call_args[1]
         assert call_kwargs.get("pool_pre_ping") is True
+
+    @patch("app.db.engine._create_async_engine")
+    def test_strips_sslmode_before_passing_to_engine(self, mock_create: MagicMock) -> None:
+        """create_engine should strip sslmode from the URL for asyncpg compat."""
+        mock_create.return_value = MagicMock(spec=AsyncEngine)
+
+        create_engine("postgresql+asyncpg://localhost/test?sslmode=disable")
+
+        call_args = mock_create.call_args
+        assert "sslmode" not in call_args[0][0]
 
     @patch("app.db.engine._create_async_engine")
     def test_returns_async_engine(self, mock_create: MagicMock) -> None:

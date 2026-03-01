@@ -46,7 +46,6 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         except Exception as exc:
             request_id = str(uuid.uuid4())
-            # TODO: emit structured log with request_id, exc type and message
             return JSONResponse(
                 status_code=500,
                 content={
